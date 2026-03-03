@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+numpy
+opencv-python
+pymongo
+insightface==0.7.3
+onnxruntime

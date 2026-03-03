@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Raj Face ML Kit - UI Test</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #0f172a;
+      color: #e5e7eb;
+      padding: 20px;
+    }
+
+    h2 {
+      margin-top: 30px;
+      color: #38bdf8;
+    }
+
+    video, canvas {
+      border: 2px solid #38bdf8;
+      border-radius: 8px;
+    }
+
+    button {
+      margin: 10px 5px;
+      padding: 10px 16px;
+      border: none;
+      border-radius: 6px;
+      background: #38bdf8;
+      color: #020617;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #0ea5e9;
+    }
+
+    input {
+      padding: 8px;
+      border-radius: 6px;
+      border: none;
+      margin-bottom: 10px;
+    }
+
+    .row {
+      display: flex;
+      gap: 30px;
+      flex-wrap: wrap;
+    }
+
+    .box {
+      background: #020617;
+      padding: 20px;
+      border-radius: 10px;
+      width: 480px;
+    }
+
+    .log {
+      background: #020617;
+      padding: 10px;
+      border-radius: 6px;
+      height: 120px;
+      overflow-y: auto;
+      font-size: 14px;
+      margin-top: 10px;
+      border: 1px solid #334155;
+    }
+
+    .success { color: #22c55e; }
+    .error { color: #ef4444; }
+    .warn { color: #facc15; }
+  </style>
+</head>
+<body>
+
+  <h1>🧠 Raj Face ML Kit - UI Test</h1>
+
+  <label>Exam ID:</label><br />
+  <input id="examId" value="exam123" /><br />
+
+  <div class="row">
+
+    <!-- REGISTER SECTION -->
+    <div class="box">
+      <h2>1️⃣ Register Face</h2>
+
+      <video id="regVideo" width="320" height="240" autoplay muted></video><br />
+      <canvas id="regCanvas" width="320" height="240" style="display:none;"></canvas>
+
+      <br />
+      <button onclick="startRegCamera()">Start Camera</button>
+      <button onclick="captureAndRegister()">Capture & Register</button>
+
+      <div id="regResult" class="log"></div>
+    </div>
+
+    <!-- VERIFY SECTION -->
+    <div class="box">
+      <h2>2️⃣ Live Verify</h2>
+
+      <video id="verVideo" width="320" height="240" autoplay muted></video><br />
+      <canvas id="verCanvas" width="320" height="240" style="display:none;"></canvas>
+
+      <br />
+      <button onclick="startVerCamera()">Start Camera</button>
+      <button onclick="startVerify()">Start Live Verify</button>
+      <button onclick="stopVerify()">Stop</button>
+
+      <div id="verResult" class="log"></div>
+    </div>
+
+  </div>
+
+<script>
+let regStream = null;
+let verStream = null;
+let verifyInterval = null;
+let isVerifying = false;
+
+const API_BASE = "http://localhost:8000/api/face";
+
+// ---------- REGISTER ----------
+
+async function startRegCamera() {
+  regStream = await navigator.mediaDevices.getUserMedia({ video: true });
+  document.getElementById("regVideo").srcObject = regStream;
+}
+
+async function captureAndRegister() {
+  const examId = document.getElementById("examId").value;
+
+  const video = document.getElementById("regVideo");
+  const canvas = document.getElementById("regCanvas");
+  const ctx = canvas.getContext("2d");
+
+  ctx.drawImage(video, 0, 0, 320, 240);
+  const imageBase64 = canvas.toDataURL("image/jpeg");
+
+  log("regResult", "📸 Captured image. Sending to /register ...");
+
+  const res = await fetch(`${API_BASE}/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ examId, imageBase64 })
+  });
+
+  const data = await res.json();
+
+  if (data.status === "ok") {
+    log("regResult", "✅ Register success", "success");
+  } else {
+    log("regResult", "❌ Register failed: " + JSON.stringify(data), "error");
+  }
+}
+
+// ---------- VERIFY (REAL-TIME 1s) ----------
+
+async function startVerCamera() {
+  verStream = await navigator.mediaDevices.getUserMedia({ video: true });
+  document.getElementById("verVideo").srcObject = verStream;
+}
+
+let stopFlag = false;
+
+function startVerify() {
+  if (isVerifying) return;
+
+  stopFlag = false;
+  log("verResult", "▶️ Live verify started (sequential mode)");
+
+  runVerifyLoop(); // 🔥 no interval, true sequential
+}
+
+async function runVerifyLoop() {
+  if (stopFlag) return;
+
+  await runVerifyOnce();     // wait for response
+  setTimeout(runVerifyLoop, 5000); // wait 1 sec after response
+}
+
+function stopVerify() {
+  stopFlag = true;
+  log("verResult", "⏹️ Live verify stopped");
+}
+
+async function runVerifyOnce() {
+  if (isVerifying) return; // prevent overlap
+  isVerifying = true;
+
+  try {
+    const examId = document.getElementById("examId").value;
+
+    const video = document.getElementById("verVideo");
+    const canvas = document.getElementById("verCanvas");
+    const ctx = canvas.getContext("2d");
+
+    ctx.drawImage(video, 0, 0, 320, 240);
+    const imageBase64 = canvas.toDataURL("image/jpeg");
+
+    const t0 = performance.now();
+
+    const res = await fetch(`${API_BASE}/verify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ examId, imageBase64 })
+    });
+
+    const data = await res.json();
+
+    const t1 = performance.now();
+    const latency = (t1 - t0).toFixed(0);
+
+    if (data.status === "ok") {
+      const cls = data.match ? "success" : "warn";
+      log(
+        "verResult",
+        `🧪 Match: ${data.match} | Score: ${data.score.toFixed(3)} | ${latency} ms`,
+        cls
+      );
+    } else {
+      log("verResult", "❌ Verify error: " + JSON.stringify(data), "error");
+    }
+
+  } catch (err) {
+    log("verResult", "❌ Network / API error: " + err.message, "error");
+  }
+
+  isVerifying = false;
+}
+
+function stopVerify() {
+  clearInterval(verifyInterval);
+  verifyInterval = null;
+  log("verResult", "⏹️ Live verify stopped");
+}
+
+// ---------- UTIL ----------
+
+function log(elId, msg, cls = "") {
+  const box = document.getElementById(elId);
+  const p = document.createElement("div");
+  p.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  if (cls) p.className = cls;
+  box.prepend(p); // newest on top
+}
+</script>
+
+</body>
+</html>
