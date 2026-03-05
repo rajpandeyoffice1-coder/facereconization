@@ -88,7 +88,7 @@
       <video id="regVideo" width="320" height="240" autoplay muted></video><br />
       <canvas id="regCanvas" width="320" height="240" style="display:none;"></canvas>
 
-      <br />
+      <br /> 
       <button onclick="startRegCamera()">Start Camera</button>
       <button onclick="captureAndRegister()">Capture & Register</button>
 
@@ -118,7 +118,7 @@ let verStream = null;
 let verifyInterval = null;
 let isVerifying = false;
 
-const API_BASE = "http://localhost:8000/api/face";
+const API_BASE = "https://facereconization.onrender.com/api/face";
 
 // ---------- REGISTER ----------
 

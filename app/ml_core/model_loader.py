@@ -1,6 +1,5 @@
 from insightface.app import FaceAnalysis
 import os
-import shutil
 
 _app = None
 
@@ -10,15 +9,11 @@ def load_models():
     if _app is not None:
         return _app
 
-    model_root = os.path.expanduser("~/.insightface/models")
-    model_path = os.path.join(model_root, "buffalo_l")
+    model_root = "/opt/render/project/src/.insightface"
+
+    os.makedirs(model_root, exist_ok=True)
 
     try:
-        # 🔥 If model folder exists but corrupted, remove it
-        if os.path.exists(model_path):
-            print("🧹 Cleaning existing model folder...")
-            shutil.rmtree(model_path)
-
         _app = FaceAnalysis(
             name="buffalo_l",
             root=model_root,
@@ -27,7 +22,7 @@ def load_models():
 
         _app.prepare(ctx_id=-1, det_size=(224, 224))
 
-        print("✅ InsightFace CPU models loaded successfully")
+        print("✅ InsightFace models loaded successfully")
 
     except Exception as e:
         print("❌ Model loading failed:", str(e))
